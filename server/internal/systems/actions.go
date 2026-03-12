@@ -71,6 +71,7 @@ func (s *ActionProcessor) handleSetStatus(entity *ecs.Entity, raw []byte) {
 				"agent_id": entity.ID.String(), "name": identity.Name,
 				"status": msg.Status, "zone": presence.Zone,
 			},
+			Scope: engine.GlobalScope(),
 		})
 	}
 }

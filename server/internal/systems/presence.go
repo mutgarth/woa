@@ -28,8 +28,9 @@ func (s *PresenceSystem) Update(world *ecs.World, tick uint64) {
 			p.Status = "offline"
 			identity := e.Get(components.IdentityType).(*components.Identity)
 			s.bus.Publish(engine.Event{
-				Type: "agent_offline",
+				Type:    "agent_offline",
 				Payload: map[string]any{"agent_id": e.ID.String(), "name": identity.Name, "reason": "timeout"},
+				Scope:   engine.GlobalScope(),
 			})
 		}
 	})
