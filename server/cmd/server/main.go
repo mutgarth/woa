@@ -15,6 +15,7 @@ import (
 	redisadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/redis"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/auth"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/guild"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/task"
 	"github.com/lucasmeneses/world-of-agents/server/internal/ecs"
 	"github.com/lucasmeneses/world-of-agents/server/internal/engine"
 	wonet "github.com/lucasmeneses/world-of-agents/server/internal/net"
@@ -57,6 +58,8 @@ func main() {
 	authService := auth.NewService(userRepo, agentRepo, tokenService, hashService)
 	guildRepo := postgres.NewGuildRepo(db)
 	guildService := guild.NewService(guildRepo, agentRepo)
+	taskRepo := postgres.NewTaskRepo(db)
+	taskService := task.NewService(taskRepo, guildRepo)
 
 	// ECS + Engine
 	world := ecs.NewWorld()
@@ -77,7 +80,7 @@ func main() {
 	go eng.Start()
 
 	mux := http.NewServeMux()
-	rest := wonet.NewREST(authService)
+	rest := wonet.NewREST(authService, guildService, taskService)
 	rest.RegisterRoutes(mux)
 	mux.HandleFunc("GET /ws", hub.HandleWebSocket)
 

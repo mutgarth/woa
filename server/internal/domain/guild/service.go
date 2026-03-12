@@ -93,3 +93,15 @@ func (s *Service) List(ctx context.Context, limit, offset int) ([]Guild, error) 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Guild, error) {
 	return s.guilds.GetByID(ctx, id)
 }
+
+func (s *Service) GetWithMembers(ctx context.Context, guildID uuid.UUID) (*Guild, []Membership, error) {
+	g, err := s.guilds.GetByID(ctx, guildID)
+	if err != nil {
+		return nil, nil, err
+	}
+	members, err := s.guilds.ListMembers(ctx, guildID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return g, members, nil
+}

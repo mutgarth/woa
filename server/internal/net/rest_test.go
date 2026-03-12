@@ -10,7 +10,7 @@ import (
 )
 
 func TestStatsEndpoint(t *testing.T) {
-	rest := wonet.NewREST(nil) // stats doesn't need auth
+	rest := wonet.NewREST(nil, nil, nil) // stats doesn't need auth
 	mux := http.NewServeMux()
 	rest.RegisterRoutes(mux)
 
@@ -27,7 +27,7 @@ func TestStatsEndpoint(t *testing.T) {
 }
 
 func TestBadJSON(t *testing.T) {
-	rest := wonet.NewREST(nil) // register will fail on nil auth, but bad JSON is caught first
+	rest := wonet.NewREST(nil, nil, nil) // register will fail on nil auth, but bad JSON is caught first
 	mux := http.NewServeMux()
 	rest.RegisterRoutes(mux)
 
