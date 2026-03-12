@@ -130,3 +130,22 @@ type MemberLeftEvent struct {
 	GuildID string `json:"guild_id"`
 	AgentID string `json:"agent_id"`
 }
+
+// --- Task messages ---
+
+type TaskPostMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Priority    string `json:"priority"`
+	} `json:"payload"`
+}
+
+type TaskActionMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		TaskID string `json:"task_id"`
+		Result string `json:"result,omitempty"` // only for task_complete
+	} `json:"payload"`
+}
