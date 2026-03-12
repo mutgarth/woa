@@ -84,3 +84,49 @@ type AgentInfo struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
+
+// Guild actions (client → server)
+type GuildCreateMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		Visibility  string `json:"visibility,omitempty"`
+	} `json:"payload"`
+}
+
+type GuildJoinMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		GuildName string `json:"guild_name"`
+	} `json:"payload"`
+}
+
+type GuildLeaveMessage struct {
+	Type string `json:"type"`
+}
+
+// Guild events (server → client)
+type GuildCreatedEvent struct {
+	Type  string    `json:"type"`
+	Guild GuildInfo `json:"guild"`
+}
+
+type GuildInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Visibility  string `json:"visibility"`
+}
+
+type MemberJoinedEvent struct {
+	Type    string    `json:"type"`
+	GuildID string    `json:"guild_id"`
+	Agent   AgentInfo `json:"agent"`
+}
+
+type MemberLeftEvent struct {
+	Type    string `json:"type"`
+	GuildID string `json:"guild_id"`
+	AgentID string `json:"agent_id"`
+}
