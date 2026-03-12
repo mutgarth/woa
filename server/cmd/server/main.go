@@ -14,6 +14,7 @@ import (
 	"github.com/lucasmeneses/world-of-agents/server/internal/adapters/postgres"
 	redisadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/redis"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/auth"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/chat"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/guild"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/task"
 	"github.com/lucasmeneses/world-of-agents/server/internal/ecs"
@@ -51,15 +52,17 @@ func main() {
 
 	userRepo := postgres.NewUserRepo(db)
 	agentRepo := postgres.NewAgentRepo(db)
+	guildRepo := postgres.NewGuildRepo(db)
+	taskRepo := postgres.NewTaskRepo(db)
+	messageRepo := postgres.NewMessageRepo(db)
 	tokenService := jwtadapter.NewTokenService(jwtSecret)
 	hashService := cryptoadapter.NewHashService()
 
 	// Domain services
 	authService := auth.NewService(userRepo, agentRepo, tokenService, hashService)
-	guildRepo := postgres.NewGuildRepo(db)
 	guildService := guild.NewService(guildRepo, agentRepo)
-	taskRepo := postgres.NewTaskRepo(db)
 	taskService := task.NewService(taskRepo, guildRepo)
+	chatService := chat.NewService(messageRepo, guildRepo)
 
 	// ECS + Engine
 	world := ecs.NewWorld()
@@ -67,8 +70,11 @@ func main() {
 
 	// Driving adapters
 	hub := wonet.NewHub(world, bus, authService)
+
 	guildSystem := systems.NewGuildSystem(guildService, bus)
-	actionRouter := systems.NewActionRouter(bus, hub.ActionQueue, guildSystem, nil, nil)
+	taskSystem := systems.NewTaskSystem(taskService, bus)
+	chatSystem := systems.NewChatSystem(chatService, bus)
+	actionRouter := systems.NewActionRouter(bus, hub.ActionQueue, guildSystem, taskSystem, chatSystem)
 	presenceSystem := systems.NewPresenceSystem(bus, 15*time.Second)
 	broadcastSystem := systems.NewBroadcastSystem(bus)
 
