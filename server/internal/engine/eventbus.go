@@ -1,10 +1,33 @@
 package engine
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/google/uuid"
+)
+
+type EventScope struct {
+	Type     string      // "global", "guild", "direct"
+	GuildID  *uuid.UUID  // for guild-scoped events
+	AgentIDs []uuid.UUID // for direct-scoped events
+}
+
+func GlobalScope() EventScope {
+	return EventScope{Type: "global"}
+}
+
+func GuildScope(guildID uuid.UUID) EventScope {
+	return EventScope{Type: "guild", GuildID: &guildID}
+}
+
+func DirectScope(agentIDs ...uuid.UUID) EventScope {
+	return EventScope{Type: "direct", AgentIDs: agentIDs}
+}
 
 type Event struct {
 	Type    string         `json:"type"`
 	Payload map[string]any `json:"payload,omitempty"`
+	Scope   EventScope     `json:"-"` // not serialized — used by BroadcastSystem only
 }
 
 type EventBus struct {
