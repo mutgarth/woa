@@ -19,10 +19,10 @@ import (
 func main() {
 	slog.Info("World of Agents server starting...")
 
-	dbURL := envOr("DATABASE_URL", "postgres://woa:woa_dev@localhost:5432/woa?sslmode=disable")
-	redisAddr := envOr("REDIS_ADDR", "localhost:6379")
+	dbURL := envOr("DATABASE_URL", "postgres://woa:woa_dev@localhost:5433/woa?sslmode=disable")
+	redisAddr := envOr("REDIS_ADDR", "localhost:6380")
 	jwtSecret := envOr("JWT_SECRET", "woa-dev-secret-change-in-production!")
-	listenAddr := envOr("LISTEN_ADDR", ":8080")
+	listenAddr := envOr("LISTEN_ADDR", ":8083")
 	tickRate := 200 * time.Millisecond
 
 	ctx := context.Background()
