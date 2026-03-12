@@ -14,6 +14,7 @@ import (
 	"github.com/lucasmeneses/world-of-agents/server/internal/adapters/postgres"
 	redisadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/redis"
 	"github.com/lucasmeneses/world-of-agents/server/internal/domain/auth"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/guild"
 	"github.com/lucasmeneses/world-of-agents/server/internal/ecs"
 	"github.com/lucasmeneses/world-of-agents/server/internal/engine"
 	wonet "github.com/lucasmeneses/world-of-agents/server/internal/net"
@@ -54,6 +55,8 @@ func main() {
 
 	// Domain services
 	authService := auth.NewService(userRepo, agentRepo, tokenService, hashService)
+	guildRepo := postgres.NewGuildRepo(db)
+	guildService := guild.NewService(guildRepo, agentRepo)
 
 	// ECS + Engine
 	world := ecs.NewWorld()
@@ -61,11 +64,12 @@ func main() {
 
 	// Driving adapters
 	hub := wonet.NewHub(world, bus, authService)
-	actionProcessor := systems.NewActionProcessor(bus, hub.ActionQueue)
+	guildSystem := systems.NewGuildSystem(guildService, bus)
+	actionRouter := systems.NewActionRouter(bus, hub.ActionQueue, guildSystem, nil, nil)
 	presenceSystem := systems.NewPresenceSystem(bus, 15*time.Second)
 	broadcastSystem := systems.NewBroadcastSystem(bus)
 
-	world.AddSystem(actionProcessor)
+	world.AddSystem(actionRouter)
 	world.AddSystem(presenceSystem)
 	world.AddSystem(broadcastSystem)
 
