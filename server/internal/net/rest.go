@@ -1,3 +1,4 @@
+// server/internal/net/rest.go
 package net
 
 import (
@@ -6,13 +7,16 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/lucasmeneses/world-of-agents/server/internal/storage"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/agent"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/auth"
 )
 
 type REST struct {
-	DB   *storage.DB
-	Auth *Auth
+	auth *auth.Service
+}
+
+func NewREST(authService *auth.Service) *REST {
+	return &REST{auth: authService}
 }
 
 func (r *REST) RegisterRoutes(mux *http.ServeMux) {
@@ -23,9 +27,6 @@ func (r *REST) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/agents/{id}", r.requireAuth(r.handleDeleteAgent))
 	mux.HandleFunc("GET /api/stats", r.handleStats)
 }
-
-type contextKey string
-const ctxKeyUserID contextKey = "user_id"
 
 func (r *REST) handleRegister(w http.ResponseWriter, req *http.Request) {
 	var body struct {
@@ -41,14 +42,9 @@ func (r *REST) handleRegister(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "email, password, and display_name required")
 		return
 	}
-	user, err := r.DB.CreateUser(req.Context(), body.Email, body.Password, body.DisplayName)
+	user, token, err := r.auth.Register(req.Context(), body.Email, body.Password, body.DisplayName)
 	if err != nil {
 		writeError(w, http.StatusConflict, "EMAIL_TAKEN", "email already registered")
-		return
-	}
-	token, err := r.Auth.GenerateJWT(user.ID.String(), user.Email)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to generate token")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"user_id": user.ID.String(), "token": token})
@@ -63,25 +59,16 @@ func (r *REST) handleLogin(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON")
 		return
 	}
-	user, err := r.DB.GetUserByEmail(req.Context(), body.Email)
+	user, token, err := r.auth.Login(req.Context(), body.Email, body.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "invalid credentials")
-		return
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)); err != nil {
-		writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "invalid credentials")
-		return
-	}
-	token, err := r.Auth.GenerateJWT(user.ID.String(), user.Email)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to generate token")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user_id": user.ID.String(), "token": token})
 }
 
 func (r *REST) handleCreateAgent(w http.ResponseWriter, req *http.Request) {
-	userID := req.Context().Value(ctxKeyUserID).(uuid.UUID)
+	userID := userIDFromContext(req)
 	var body struct {
 		Name      string `json:"name"`
 		AgentType string `json:"agent_type"`
@@ -94,39 +81,39 @@ func (r *REST) handleCreateAgent(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "name and agent_type required")
 		return
 	}
-	agent, apiKey, err := r.DB.CreateAgent(req.Context(), userID, body.Name, body.AgentType)
+	a, apiKey, err := r.auth.CreateAgent(req.Context(), userID, body.Name, agent.AgentType(body.AgentType))
 	if err != nil {
 		writeError(w, http.StatusConflict, "AGENT_EXISTS", "agent name already taken")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"agent_id": agent.ID.String(), "name": agent.Name,
-		"agent_type": agent.AgentType, "api_key": apiKey,
+		"agent_id": a.ID.String(), "name": a.Name,
+		"agent_type": string(a.AgentType), "api_key": apiKey,
 	})
 }
 
 func (r *REST) handleListAgents(w http.ResponseWriter, req *http.Request) {
-	userID := req.Context().Value(ctxKeyUserID).(uuid.UUID)
-	agents, err := r.DB.ListAgentsByOwner(req.Context(), userID)
+	userID := userIDFromContext(req)
+	agents, err := r.auth.ListAgents(req.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list agents")
 		return
 	}
 	result := make([]map[string]any, len(agents))
 	for i, a := range agents {
-		result[i] = map[string]any{"id": a.ID.String(), "name": a.Name, "agent_type": a.AgentType}
+		result[i] = map[string]any{"id": a.ID.String(), "name": a.Name, "agent_type": string(a.AgentType)}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
 func (r *REST) handleDeleteAgent(w http.ResponseWriter, req *http.Request) {
-	userID := req.Context().Value(ctxKeyUserID).(uuid.UUID)
+	userID := userIDFromContext(req)
 	agentID, err := uuid.Parse(req.PathValue("id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid agent ID")
 		return
 	}
-	if err := r.DB.DeleteAgent(req.Context(), agentID, userID); err != nil {
+	if err := r.auth.DeleteAgent(req.Context(), agentID, userID); err != nil {
 		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "agent not found")
 		return
 	}
@@ -144,27 +131,12 @@ func (r *REST) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "missing Authorization header")
 			return
 		}
-		claims, err := r.Auth.ValidateJWT(authHeader[7:])
+		claims, err := r.auth.AuthenticateByToken(req.Context(), authHeader[7:])
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "invalid token")
 			return
 		}
-		uid, err := uuid.Parse(claims.UserID)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "invalid user ID in token")
-			return
-		}
-		ctx := context.WithValue(req.Context(), ctxKeyUserID, uid)
+		ctx := context.WithValue(req.Context(), ctxKeyUserID, claims.UserID)
 		next(w, req.WithContext(ctx))
 	}
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
