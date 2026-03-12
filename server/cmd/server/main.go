@@ -9,10 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	cryptoadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/crypto"
+	jwtadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/jwt"
+	"github.com/lucasmeneses/world-of-agents/server/internal/adapters/postgres"
+	redisadapter "github.com/lucasmeneses/world-of-agents/server/internal/adapters/redis"
+	"github.com/lucasmeneses/world-of-agents/server/internal/domain/auth"
 	"github.com/lucasmeneses/world-of-agents/server/internal/ecs"
 	"github.com/lucasmeneses/world-of-agents/server/internal/engine"
 	wonet "github.com/lucasmeneses/world-of-agents/server/internal/net"
-	"github.com/lucasmeneses/world-of-agents/server/internal/storage"
 	"github.com/lucasmeneses/world-of-agents/server/internal/systems"
 )
 
@@ -26,27 +30,37 @@ func main() {
 	tickRate := 200 * time.Millisecond
 
 	ctx := context.Background()
-	db, err := storage.NewDB(ctx, dbURL)
+
+	// Driven adapters
+	db, err := postgres.NewDB(ctx, dbURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
 
-	redisStore, err := storage.NewRedisStore(redisAddr)
+	redisCache, err := redisadapter.NewPresenceCache(redisAddr)
 	if err != nil {
 		slog.Error("failed to connect to redis", "error", err)
 		os.Exit(1)
 	}
-	defer redisStore.Close()
-	_ = redisStore // will be wired into PresenceSystem in Phase 2
+	defer redisCache.Close()
+	_ = redisCache // wired into PresenceSystem in a future phase
 
+	userRepo := postgres.NewUserRepo(db)
+	agentRepo := postgres.NewAgentRepo(db)
+	tokenService := jwtadapter.NewTokenService(jwtSecret)
+	hashService := cryptoadapter.NewHashService()
+
+	// Domain services
+	authService := auth.NewService(userRepo, agentRepo, tokenService, hashService)
+
+	// ECS + Engine
 	world := ecs.NewWorld()
 	bus := engine.NewEventBus()
 
-	auth := wonet.NewAuth(jwtSecret)
-	hub := wonet.NewHub(world, bus, db, auth)
-
+	// Driving adapters
+	hub := wonet.NewHub(world, bus, authService)
 	actionProcessor := systems.NewActionProcessor(bus, hub.ActionQueue)
 	presenceSystem := systems.NewPresenceSystem(bus, 15*time.Second)
 	broadcastSystem := systems.NewBroadcastSystem(bus)
@@ -59,7 +73,7 @@ func main() {
 	go eng.Start()
 
 	mux := http.NewServeMux()
-	rest := &wonet.REST{DB: db, Auth: auth}
+	rest := wonet.NewREST(authService)
 	rest.RegisterRoutes(mux)
 	mux.HandleFunc("GET /ws", hub.HandleWebSocket)
 
@@ -85,6 +99,8 @@ func main() {
 }
 
 func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return fallback
 }

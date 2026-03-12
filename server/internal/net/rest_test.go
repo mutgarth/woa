@@ -1,44 +1,41 @@
 package net_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	wonet "github.com/lucasmeneses/world-of-agents/server/internal/net"
 )
 
-func TestHandleStats_ReturnsOnline(t *testing.T) {
+func TestStatsEndpoint(t *testing.T) {
+	rest := wonet.NewREST(nil) // stats doesn't need auth
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"status": "online"})
-	})
+	rest.RegisterRoutes(mux)
+
 	req := httptest.NewRequest("GET", "/api/stats", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK { t.Fatalf("expected 200, got %d", rec.Code) }
-	var body map[string]any
-	json.NewDecoder(rec.Body).Decode(&body)
-	if body["status"] != "online" { t.Fatalf("expected status=online, got %v", body["status"]) }
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "online") {
+		t.Fatal("expected 'online' in response")
+	}
 }
 
-func TestHandleRegister_RejectsBadJSON(t *testing.T) {
+func TestBadJSON(t *testing.T) {
+	rest := wonet.NewREST(nil) // register will fail on nil auth, but bad JSON is caught first
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/register", func(w http.ResponseWriter, r *http.Request) {
-		var body struct { Email string `json:"email"` }
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]string{"code": "BAD_REQUEST", "message": "invalid JSON"},
-			})
-			return
-		}
-	})
-	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader([]byte("not json")))
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusBadRequest { t.Fatalf("expected 400, got %d", rec.Code) }
+	rest.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/auth/register", strings.NewReader("{bad"))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
 }
