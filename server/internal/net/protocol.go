@@ -149,3 +149,14 @@ type TaskActionMessage struct {
 		Result string `json:"result,omitempty"` // only for task_complete
 	} `json:"payload"`
 }
+
+// --- Chat messages ---
+
+type ChatMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		Channel string `json:"channel"`
+		Content string `json:"content"`
+		To      string `json:"to,omitempty"` // for direct messages
+	} `json:"payload"`
+}
