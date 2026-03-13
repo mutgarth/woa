@@ -195,6 +195,7 @@ type AgentOfflineEvent struct {
 
 type AgentStatusEvent struct {
     AgentID string
+    Name    string
     Status  string
     Zone    string
 }
