@@ -1,6 +1,9 @@
 package woasdk
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type serverMessage struct {
 	Type  string
@@ -68,59 +71,63 @@ func parseTickEvent(data json.RawMessage) (Event, error) {
 		return nil, err
 	}
 	var evt Event
+	var perr error
 	switch env.Type {
 	case "guild_created":
 		var e GuildCreatedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "member_joined":
 		var e MemberJoinedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "member_left":
 		var e MemberLeftEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_created":
 		var e TaskCreatedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_claimed":
 		var e TaskClaimedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_completed":
 		var e TaskCompletedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_abandoned":
 		var e TaskAbandonedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_failed":
 		var e TaskFailedEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "task_cancelled":
 		var e TaskCancelledEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "message":
 		var e MessageEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "agent_online":
 		var e AgentOnlineEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "agent_offline":
 		var e AgentOfflineEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
 	case "agent_status":
 		var e AgentStatusEvent
-		json.Unmarshal(env.Payload, &e)
+		perr = json.Unmarshal(env.Payload, &e)
 		evt = &e
+	}
+	if perr != nil {
+		return nil, fmt.Errorf("parse %s payload: %w", env.Type, perr)
 	}
 	return evt, nil
 }

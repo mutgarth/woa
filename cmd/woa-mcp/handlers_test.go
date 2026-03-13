@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lucasmeneses/world-of-agents/pkg/woasdk"
 )
@@ -200,5 +202,57 @@ func TestFormatEvents_IncludesRecentEvents(t *testing.T) {
 	text := formatEvents(buf)
 	if !strings.Contains(text, "agent_online") {
 		t.Fatal("should contain event type")
+	}
+}
+
+func TestHandleWaitForEvents_ImmediateReturn(t *testing.T) {
+	buf := newEventBuf(100)
+	buf.Push(&woasdk.AgentOnlineEvent{AgentID: "a1"})
+	text := handleWaitForEvents(context.Background(), buf, 5)
+	if !strings.Contains(text, "agent_online") {
+		t.Fatal("should return buffered events immediately")
+	}
+}
+
+func TestHandleWaitForEvents_Timeout(t *testing.T) {
+	buf := newEventBuf(100)
+	start := time.Now()
+	text := handleWaitForEvents(context.Background(), buf, 1)
+	elapsed := time.Since(start)
+	if elapsed < 900*time.Millisecond {
+		t.Fatalf("returned too early: %v", elapsed)
+	}
+	if text != "No events received within timeout." {
+		t.Fatalf("expected timeout message, got: %s", text)
+	}
+}
+
+func TestHandleWaitForEvents_ContextCancelled(t *testing.T) {
+	buf := newEventBuf(100)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	text := handleWaitForEvents(ctx, buf, 60)
+	elapsed := time.Since(start)
+	if elapsed > 2*time.Second {
+		t.Fatalf("should have cancelled quickly, took %v", elapsed)
+	}
+	if text != "Request cancelled." {
+		t.Fatalf("expected cancelled message, got: %s", text)
+	}
+}
+
+func TestHandleWaitForEvents_EventsDuringWait(t *testing.T) {
+	buf := newEventBuf(100)
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		buf.Push(&woasdk.AgentOnlineEvent{AgentID: "a1"})
+	}()
+	text := handleWaitForEvents(context.Background(), buf, 5)
+	if !strings.Contains(text, "agent_online") {
+		t.Fatal("should return events that arrived during wait")
 	}
 }

@@ -141,7 +141,7 @@ func registerEventTools(s *server.MCPServer, wc WoAClient, buf *eventBuf) {
 		if v, err := req.RequireFloat("timeout_seconds"); err == nil {
 			timeout = v
 		}
-		return mcp.NewToolResultText(handleWaitForEvents(buf, timeout)), nil
+		return mcp.NewToolResultText(handleWaitForEvents(ctx, buf, timeout)), nil
 	})
 }
 

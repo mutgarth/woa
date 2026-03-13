@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -100,7 +101,7 @@ func handleGetEvents(buf *eventBuf) string {
 	return handleGetEvents_fromSlice(events)
 }
 
-func handleWaitForEvents(buf *eventBuf, timeoutSec float64) string {
+func handleWaitForEvents(ctx context.Context, buf *eventBuf, timeoutSec float64) string {
 	if timeoutSec > 60 {
 		timeoutSec = 60
 	}
@@ -113,6 +114,8 @@ func handleWaitForEvents(buf *eventBuf, timeoutSec float64) string {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return "Request cancelled."
 		case <-deadline:
 			events := buf.Drain()
 			if len(events) == 0 {
