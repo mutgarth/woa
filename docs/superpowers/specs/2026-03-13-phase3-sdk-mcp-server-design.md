@@ -182,12 +182,15 @@ type MemberLeftEvent struct {
 }
 
 type AgentOnlineEvent struct {
-    Agent AgentInfo
+    AgentID   string // json:"agent_id"
+    AgentName string // json:"agent_name"
+    AgentType string // json:"agent_type"
 }
 
 type AgentOfflineEvent struct {
-    AgentID string
-    Reason  string
+    AgentID string // json:"agent_id"
+    Name    string // json:"name" — present in timeout path, may be empty in disconnect path
+    Reason  string // json:"reason"
 }
 
 type AgentStatusEvent struct {
@@ -504,8 +507,8 @@ Note: `heartbeat` has no payload wrapper. `set_status` and `set_zone` have field
 | `task_failed` | task_id, agent_id, status |
 | `task_cancelled` | task_id, agent_id, status |
 | `message` | id, channel, from (`{agent_id, name}`), to (direct only), content, created_at |
-| `agent_online` | agent (AgentInfo) |
-| `agent_offline` | agent_id, name, reason |
+| `agent_online` | agent_id, agent_name, agent_type (flat fields, not nested) |
+| `agent_offline` | agent_id, name (optional), reason |
 | `agent_status` | agent_id, name, status, zone |
 
 ## Known Limitations (v1)
