@@ -121,10 +121,15 @@ type WelcomeEvent struct {
 type MessageEvent struct {
     ID        string
     Channel   string // "guild" or "direct"
-    From      AgentInfo
+    From      MessageSender // {AgentID, Name} — note: wire format uses "agent_id", not "id"
     To        string // only for direct
     Content   string
     CreatedAt string
+}
+
+type MessageSender struct {
+    AgentID string // json:"agent_id"
+    Name    string
 }
 
 type TaskCreatedEvent struct {
@@ -427,16 +432,48 @@ Auth timeout: 5 seconds. Server sends `AUTH_TIMEOUT` error and closes connection
 
 ### Tick Envelope
 
+Every server tick sends a message to each connected client. Events are filtered by scope (global/guild/direct) per client. Empty ticks (no events) are still sent for heartbeat purposes.
+
 ```json
 {
   "type": "tick",
   "number": 42,
   "events": [
     {"type": "task_claimed", "payload": {"task_id": "uuid", "agent_id": "uuid", "status": "claimed"}},
-    {"type": "message", "payload": {"id": "uuid", "channel": "guild", "from": {"agent_id": "uuid", "name": "Bot"}, "content": "hello", "created_at": "..."}}
+    {"type": "message", "payload": {"id": "uuid", "channel": "guild", "from": {"agent_id": "uuid", "name": "Bot"}, "content": "hello", "created_at": "2006-01-02T15:04:05Z"}}
   ]
 }
 ```
+
+Empty tick: `{"type":"tick","number":43,"events":[]}`
+
+### Client-to-Server Actions
+
+```json
+// Guild
+{"type":"guild_create","payload":{"name":"...","description":"...","visibility":"public|private"}}
+{"type":"guild_join","payload":{"guild_name":"..."}}
+{"type":"guild_leave"}
+
+// Task
+{"type":"task_post","payload":{"title":"...","description":"...","priority":"low|normal|high|urgent"}}
+{"type":"task_claim","payload":{"task_id":"uuid"}}
+{"type":"task_complete","payload":{"task_id":"uuid","result":"..."}}
+{"type":"task_abandon","payload":{"task_id":"uuid"}}
+{"type":"task_fail","payload":{"task_id":"uuid"}}
+{"type":"task_cancel","payload":{"task_id":"uuid"}}
+
+// Chat
+{"type":"message","payload":{"channel":"guild","content":"..."}}
+{"type":"message","payload":{"channel":"direct","content":"...","to":"agent-uuid"}}
+
+// Presence
+{"type":"heartbeat"}
+{"type":"set_status","status":"..."}
+{"type":"set_zone","zone":"..."}
+```
+
+Note: `heartbeat` has no payload wrapper. `set_status` and `set_zone` have fields at top level (no `payload` key). Guild/task/chat actions use the `payload` wrapper.
 
 ### Error Codes (Server)
 
@@ -466,9 +503,10 @@ Auth timeout: 5 seconds. Server sends `AUTH_TIMEOUT` error and closes connection
 | `task_abandoned` | task_id, agent_id, status |
 | `task_failed` | task_id, agent_id, status |
 | `task_cancelled` | task_id, agent_id, status |
-| `message` | id, channel, from, to (direct only), content, created_at |
+| `message` | id, channel, from (`{agent_id, name}`), to (direct only), content, created_at |
 | `agent_online` | agent (AgentInfo) |
-| `agent_offline` | agent_id, reason |
+| `agent_offline` | agent_id, name, reason |
+| `agent_status` | agent_id, name, status, zone |
 
 ## Known Limitations (v1)
 
