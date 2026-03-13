@@ -73,15 +73,21 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	if msg.Type == "error" {
 		conn.Close()
-		evt := msg.Event.(*ErrorEvent)
-		return nil, fmt.Errorf("woasdk: auth failed: [%s] %s", evt.Code, evt.Message)
+		if evt, ok := msg.Event.(*ErrorEvent); ok {
+			return nil, fmt.Errorf("woasdk: auth failed: [%s] %s", evt.Code, evt.Message)
+		}
+		return nil, fmt.Errorf("woasdk: auth failed: unknown error")
 	}
 	if msg.Type != "welcome" {
 		conn.Close()
 		return nil, fmt.Errorf("woasdk: expected welcome, got %q", msg.Type)
 	}
 
-	welcome := msg.Event.(*WelcomeEvent)
+	welcome, ok := msg.Event.(*WelcomeEvent)
+	if !ok {
+		conn.Close()
+		return nil, fmt.Errorf("woasdk: unexpected welcome event type")
+	}
 	conn.SetReadDeadline(time.Time{})
 
 	c := &Client{
@@ -152,6 +158,7 @@ func (c *Client) readLoop() {
 }
 
 func (c *Client) writeLoop() {
+	defer c.Close()
 	for {
 		select {
 		case data := <-c.writeCh:
@@ -182,8 +189,10 @@ func (c *Client) pushEvent(evt Event) {
 	select {
 	case c.eventCh <- evt:
 	default:
+		// Drop oldest event to make room
 		select {
 		case <-c.eventCh:
+			slog.Warn("woasdk: event buffer full, dropped oldest event")
 		default:
 		}
 		select {
